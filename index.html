@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Anime Progress Tracker</title>
     <style>
-        /* Your existing CSS remains unchanged */
         * {
             margin: 0;
             padding: 0;
@@ -191,10 +190,10 @@
     <div class="dropdown">
         <button class="dropbtn" id="seasonDropdown">Winter Season</button>
         <div class="dropdown-content">
-            <a href="#" onclick="changeSeason('Winter'); return false;">Winter</a>
-            <a href="#" onclick="changeSeason('Spring'); return false;">Spring</a>
-            <a href="#" onclick="changeSeason('Summer'); return false;">Summer</a>
-            <a href="#" onclick="changeSeason('Fall'); return false;">Fall</a>
+            <a href="#winter" onclick="changeSeason('Winter')">Winter</a>
+            <a href="#spring" onclick="changeSeason('Spring')">Spring</a>
+            <a href="#summer" onclick="changeSeason('Summer')">Summer</a>
+            <a href="#fall" onclick="changeSeason('Fall')">Fall</a>
         </div>
     </div>
 
@@ -244,20 +243,31 @@
         </div>
     </div>
 
-    <div id="errorMessage" class="error" style="display: none;">An error occurred. Check the console for details.</div>
+    <div id="errorMessage" class="error">An error occurred. Check the console for details.</div>
 
     <button id="clearAll">Clear All</button>
 
     <script>
         let currentSeason = 'Winter';
 
-        // Load saved data or URL season when the page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            const path = window.location.pathname.toLowerCase();
+        // Load season from URL hash on page load
+        window.addEventListener('load', () => {
+            const hash = window.location.hash.slice(1).toLowerCase();
             const seasons = ['winter', 'spring', 'summer', 'fall'];
-            const seasonFromUrl = seasons.find(season => path.includes(season));
-            currentSeason = seasonFromUrl ? seasonFromUrl.charAt(0).toUpperCase() + seasonFromUrl.slice(1) : 'Winter';
-            changeSeason(currentSeason); // Load season from URL or default to Winter
+            const seasonFromHash = seasons.find(season => season === hash);
+            currentSeason = seasonFromHash ? seasonFromHash.charAt(0).toUpperCase() + seasonFromHash.slice(1) : 'Winter';
+            changeSeason(currentSeason);
+        });
+
+        // Update season when hash changes (e.g., back/forward navigation)
+        window.addEventListener('hashchange', () => {
+            const hash = window.location.hash.slice(1).toLowerCase();
+            const seasons = ['winter', 'spring', 'summer', 'fall'];
+            const seasonFromHash = seasons.find(season => season === hash);
+            if (seasonFromHash) {
+                currentSeason = seasonFromHash.charAt(0).toUpperCase() + seasonFromHash.slice(1);
+                changeSeason(currentSeason);
+            }
         });
 
         // Toggle day content visibility
@@ -266,25 +276,18 @@
             content.classList.toggle('hidden');
         }
 
-        // Change season, update UI/content, and modify URL
+        // Change season and update UI
         function changeSeason(season) {
             currentSeason = season;
             document.getElementById('seasonDropdown').textContent = `${season} Season`;
             document.getElementById('seasonTitle').textContent = `${season} Season Anime Progress`;
-            
-            // Update the URL without reloading the page
-            const newUrl = `/${season.toLowerCase()}`;
-            history.pushState({ season }, `${season} Season Anime Progress`, newUrl);
-
-            loadProgress(); // Load progress for the selected season
-            document.getElementById('clearAll').onclick = function() {
-                if (confirm(`Are you sure you want to clear all ${season} anime entries? This cannot be undone.`)) {
+            window.location.hash = season.toLowerCase(); // Update hash
+            loadProgress();
+            document.getElementById('clearAll').onclick = () => {
+                if (confirm(`Are you sure you want to clear all ${season} anime entries?`)) {
                     localStorage.removeItem(`${season.toLowerCase()}AnimeProgress`);
                     ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => {
-                        const content = document.getElementById(`${day}-content`);
-                        if (content) {
-                            content.innerHTML = '';
-                        }
+                        document.getElementById(`${day}-content`).innerHTML = '';
                     });
                 }
             };
@@ -292,18 +295,14 @@
 
         // Add a new anime entry
         function addEntry(day) {
-            const namePrompt = prompt(`Enter anime name for ${currentSeason} Season:`);
-            if (!namePrompt || !namePrompt.trim()) {
+            const name = prompt(`Enter anime name for ${currentSeason} Season:`)?.trim();
+            if (!name) {
                 alert("Please enter a valid anime name.");
                 return;
             }
-            const name = namePrompt.trim();
-            const sanitizedName = name.replace(/\s+/g, '-').replace(/'/g, '\\\'').replace(/"/g, '\\"').replace(/[^\w-]/g, '');
+            const sanitizedName = name.replace(/\s+/g, '-').replace(/[^\w-]/g, '');
             try {
                 const content = document.getElementById(`${day}-content`);
-                if (!content) {
-                    throw new Error(`Content element for ${day} not found`);
-                }
                 const entry = document.createElement('div');
                 entry.className = 'entry';
                 entry.innerHTML = `
@@ -323,32 +322,24 @@
             }
         }
 
-        // Set the total number of episodes
+        // Set total episodes
         function setTotal(day, name) {
-            const totalEpisodes = prompt("Enter total number of episodes:");
-            if (totalEpisodes && !isNaN(totalEpisodes)) {
+            const total = prompt("Enter total number of episodes:");
+            if (total && !isNaN(total)) {
                 const progressSpan = document.getElementById(`progress-${day}-${name}`);
-                if (!progressSpan) {
-                    throw new Error(`Progress span for ${day}-${name} not found`);
-                }
                 const [current] = progressSpan.textContent.split('/').map(Number) || [0];
-                const newTotal = parseInt(totalEpisodes, 10);
+                const newTotal = parseInt(total, 10);
                 const adjustedCurrent = Math.min(current, newTotal);
                 progressSpan.textContent = `${adjustedCurrent}/${newTotal}`;
                 saveProgress();
             } else {
-                alert("Please enter a valid number for total episodes.");
+                alert("Please enter a valid number.");
             }
         }
 
         // Update progress
         function updateProgress(day, name, change) {
             const progressSpan = document.getElementById(`progress-${day}-${name}`);
-            if (!progressSpan) {
-                console.error(`Progress span for ${day}-${name} not found`);
-                document.getElementById('errorMessage').style.display = 'block';
-                return;
-            }
             let [current, total] = progressSpan.textContent.split('/').map(x => x === '?' ? null : parseInt(x, 10));
             if (total === null) {
                 alert("Please set the total number of episodes first.");
@@ -359,99 +350,69 @@
             saveProgress();
         }
 
-        // Delete an anime entry
+        // Delete an entry
         function deleteEntry(day, name) {
             if (confirm("Are you sure you want to delete this anime?")) {
-                try {
-                    const content = document.getElementById(`${day}-content`);
-                    if (!content) {
-                        throw new Error(`Content element for ${day} not found`);
+                const content = document.getElementById(`${day}-content`);
+                const entries = content.getElementsByClassName('entry');
+                for (let entry of entries) {
+                    const entryName = entry.textContent.split(' - ')[0].trim();
+                    const sanitizedEntryName = entryName.replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+                    if (sanitizedEntryName === name) {
+                        content.removeChild(entry);
+                        saveProgress();
+                        return;
                     }
-                    const entries = content.getElementsByClassName('entry');
-                    for (let entry of entries) {
-                        const entryName = entry.textContent.split(' - ')[0].trim();
-                        const sanitizedEntryName = entryName.replace(/\s+/g, '-').replace(/'/g, '\\\'').replace(/"/g, '\\"').replace(/[^\w-]/g, '');
-                        if (sanitizedEntryName === name) {
-                            content.removeChild(entry);
-                            saveProgress();
-                            return;
-                        }
-                    }
-                    throw new Error(`Entry for ${name} not found`);
-                } catch (error) {
-                    console.error('Error deleting entry:', error);
-                    document.getElementById('errorMessage').style.display = 'block';
                 }
             }
         }
 
-        // Save progress to localStorage for the current season
+        // Save progress to localStorage
         function saveProgress() {
             const progress = {};
             ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => {
                 const content = document.getElementById(`${day}-content`);
-                if (content) {
-                    const entries = content.getElementsByClassName('entry');
-                    progress[day] = {};
-                    for (let entry of entries) {
-                        const name = entry.textContent.split(' - ')[0].trim();
-                        const sanitizedName = name.replace(/\s+/g, '-').replace(/'/g, '\\\'').replace(/"/g, '\\"').replace(/[^\w-]/g, '');
-                        const progressText = entry.querySelector('span').textContent;
-                        progress[day][name] = progressText;
-                    }
+                progress[day] = {};
+                const entries = content.getElementsByClassName('entry');
+                for (let entry of entries) {
+                    const name = entry.textContent.split(' - ')[0].trim();
+                    const progressText = entry.querySelector('span').textContent;
+                    progress[day][name] = progressText;
                 }
             });
             localStorage.setItem(`${currentSeason.toLowerCase()}AnimeProgress`, JSON.stringify(progress));
         }
 
-        // Load progress from localStorage for the current season
+        // Load progress from localStorage
         function loadProgress() {
             const savedProgress = localStorage.getItem(`${currentSeason.toLowerCase()}AnimeProgress`);
             ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => {
-                const content = document.getElementById(`${day}-content`);
-                if (content) {
-                    content.innerHTML = '';
-                }
+                document.getElementById(`${day}-content`).innerHTML = '';
             });
             if (savedProgress) {
-                try {
-                    const progress = JSON.parse(savedProgress);
-                    ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => {
-                        const content = document.getElementById(`${day}-content`);
-                        if (content && progress[day]) {
-                            Object.entries(progress[day]).forEach(([name, prog]) => {
-                                const sanitizedName = name.replace(/\s+/g, '-').replace(/'/g, '\\\'').replace(/"/g, '\\"').replace(/[^\w-]/g, '');
-                                const entry = document.createElement('div');
-                                entry.className = 'entry';
-                                entry.innerHTML = `
-                                    ${name} - <span id="progress-${day}-${sanitizedName}">${prog}</span>
-                                    <div>
-                                        <button onclick="setTotal('${day}', '${sanitizedName}')">Set Total</button>
-                                        <button onclick="updateProgress('${day}', '${sanitizedName}', -1)">-</button>
-                                        <button onclick="updateProgress('${day}', '${sanitizedName}', 1)">+</button>
-                                        <button onclick="deleteEntry('${day}', '${sanitizedName}')">Delete</button>
-                                    </div>
-                                `;
-                                content.appendChild(entry);
-                            });
-                        }
-                    });
-                } catch (error) {
-                    console.error('Error loading progress:', error);
-                    document.getElementById('errorMessage').style.display = 'block';
-                }
+                const progress = JSON.parse(savedProgress);
+                ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => {
+                    const content = document.getElementById(`${day}-content`);
+                    if (progress[day]) {
+                        Object.entries(progress[day]).forEach(([name, prog]) => {
+                            const sanitizedName = name.replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+                            const entry = document.createElement('div');
+                            entry.className = 'entry';
+                            entry.innerHTML = `
+                                ${name} - <span id="progress-${day}-${sanitizedName}">${prog}</span>
+                                <div>
+                                    <button onclick="setTotal('${day}', '${sanitizedName}')">Set Total</button>
+                                    <button onclick="updateProgress('${day}', '${sanitizedName}', -1)">-</button>
+                                    <button onclick="updateProgress('${day}', '${sanitizedName}', 1)">+</button>
+                                    <button onclick="deleteEntry('${day}', '${sanitizedName}')">Delete</button>
+                                </div>
+                            `;
+                            content.appendChild(entry);
+                        });
+                    }
+                });
             }
         }
-
-        // Handle browser back/forward navigation
-        window.addEventListener('popstate', (event) => {
-            if (event.state && event.state.season) {
-                changeSeason(event.state.season);
-            }
-        });
-
-        // Save progress before page unload for the current season
-        window.addEventListener('beforeunload', saveProgress);
     </script>
 </body>
 </html>
